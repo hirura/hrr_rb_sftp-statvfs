@@ -1,6 +1,7 @@
 # HrrRbSftp::Statvfs
 
 [![Build Status](https://travis-ci.com/hirura/hrr_rb_sftp-statvfs.svg?branch=master)](https://travis-ci.com/hirura/hrr_rb_sftp-statvfs)
+[![Gem Version](https://badge.fury.io/rb/hrr_rb_sftp-statvfs.svg)](https://badge.fury.io/rb/hrr_rb_sftp-statvfs)
 
 hrr_rb_sftp-statvfs is an hrr_rb_sftp extension that supports statvfs@openssh.com and fstatvfs@openssh.com extensions.
 
