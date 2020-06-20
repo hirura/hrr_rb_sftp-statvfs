@@ -1,5 +1,9 @@
 module HrrRbSftp
   module Statvfs
-    VERSION = "0.1.0"
+
+    #
+    # hrr_rb_sftp-statvfs library version.
+    #
+    VERSION = "0.2.0"
   end
 end
