@@ -65,6 +65,7 @@ RSpec.describe HrrRbSftp::Server do
               expect( packet[:"extensions"] ).to eq []
             else
               expect( packet[:"extensions"] ).to include({:"extension-name"=>"statvfs@openssh.com",  :"extension-data"=>"2"})
+              expect( packet[:"extensions"] ).to include({:"extension-name"=>"fstatvfs@openssh.com", :"extension-data"=>"2"})
             end
           end
         end
@@ -183,6 +184,99 @@ RSpec.describe HrrRbSftp::Server do
                 expect( packet[:"request-id"] ).to eq request_id
                 expect( packet[:"code"]       ).to eq version_class::Packets::SSH_FXP_STATUS::SSH_FX_FAILURE
                 expect( packet[:"error message"] ).to eq "statvfs() function failed: File name too long"
+                expect( packet[:"language tag"]  ).to eq ""
+              end
+            end
+          end
+
+          context "with fstatvfs@openssh.com extended-request" do
+            let(:extended_packet){
+              {
+                :"type"             => version_class::Packets::SSH_FXP_EXTENDED::TYPE,
+                :"request-id"       => extended_request_id,
+                :"extended-request" => extended_request,
+                :"handle"           => @handle,
+              }
+            }
+            let(:extended_request){ "fstatvfs@openssh.com" }
+
+            context "when request is valid" do
+              let(:opendir_packet){
+                {
+                  :"type"       => version_class::Packets::SSH_FXP_OPENDIR::TYPE,
+                  :"request-id" => opendir_request_id,
+                  :"path"       => path,
+                }
+              }
+              let(:opendir_payload){
+                version_class::Packets::SSH_FXP_OPENDIR.new(*pkt_args).encode(opendir_packet)
+              }
+              let(:opendir_request_id){ 1 }
+              let(:path){ "." }
+
+              let(:close_packet){
+                {
+                  :"type"       => version_class::Packets::SSH_FXP_CLOSE::TYPE,
+                  :"request-id" => close_request_id,
+                  :"handle"     => @handle,
+                }
+              }
+              let(:close_payload){
+                version_class::Packets::SSH_FXP_CLOSE.new(*pkt_args).encode(close_packet)
+              }
+              let(:close_request_id){ 20 }
+
+              let(:extended_request_id){ 10 }
+              let(:complementary_packet){
+                {:"extended-reply" => "fstatvfs@openssh.com"}
+              }
+
+              before :example do
+                io.remote.in.write ([opendir_payload.bytesize].pack("N") + opendir_payload)
+                payload_length = io.remote.out.read(4).unpack("N")[0]
+                payload = io.remote.out.read(payload_length)
+                packet = version_class::Packets::SSH_FXP_HANDLE.new(*pkt_args).decode(payload)
+                @handle = packet[:"handle"]
+              end
+
+              it "returns extended-reply response" do
+                io.remote.in.write ([extended_payload.bytesize].pack("N") + extended_payload)
+                payload_length = io.remote.out.read(4).unpack("N")[0]
+                payload = io.remote.out.read(payload_length)
+                expect( payload[0].unpack("C")[0] ).to eq version_class::Packets::SSH_FXP_EXTENDED_REPLY::TYPE
+                packet = version_class::Packets::SSH_FXP_EXTENDED_REPLY.new(*pkt_args).decode(payload, complementary_packet)
+                stat = Sys::Filesystem.stat(path)
+                expect( packet[:"request-id"] ).to eq extended_request_id
+                expect( packet[:"f_bsize"]    ).to eq (stat.block_size)
+                expect( packet[:"f_frsize"]   ).to eq (stat.fragment_size)
+                expect( packet[:"f_blocks"]   ).to eq (stat.blocks)
+                expect( packet[:"f_bfree"]    ).to eq (stat.blocks_free)
+                expect( packet[:"f_bavail"]   ).to eq (stat.blocks_available)
+                expect( packet[:"f_files"]    ).to eq (stat.files)
+                expect( packet[:"f_ffree"]    ).to eq (stat.files_free)
+                expect( packet[:"f_favail"]   ).to eq (stat.files_available)
+                expect( packet[:"f_fsid"]     ).to eq (stat.filesystem_id)
+                expect( packet[:"f_flag"]     ).to eq (stat.flags & (Sys::Filesystem::Stat::RDONLY | Sys::Filesystem::Stat::NOSUID))
+                expect( packet[:"f_namemax"]  ).to eq (stat.name_max)
+              end
+            end
+
+            context "when specified handle does not exist" do
+              let(:extended_request_id){ 10 }
+
+              before :example do
+                @handle = "handle"
+              end
+
+              it "returns status response" do
+                io.remote.in.write ([extended_payload.bytesize].pack("N") + extended_payload)
+                payload_length = io.remote.out.read(4).unpack("N")[0]
+                payload = io.remote.out.read(payload_length)
+                expect( payload[0].unpack("C")[0] ).to eq version_class::Packets::SSH_FXP_STATUS::TYPE
+                packet = version_class::Packets::SSH_FXP_STATUS.new(*pkt_args).decode(payload)
+                expect( packet[:"request-id"]    ).to eq extended_request_id
+                expect( packet[:"code"]          ).to eq version_class::Packets::SSH_FXP_STATUS::SSH_FX_FAILURE
+                expect( packet[:"error message"] ).to eq "Specified handle does not exist"
                 expect( packet[:"language tag"]  ).to eq ""
               end
             end
